@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Finanzas Personales</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta
+    name="description"
+    content="Dashboard sencillo de finanzas personales: registra ingresos y gastos, filtra por rangos y visualiza gráficos por categoría y por mes. Todos los datos se guardan en tu navegador, sin subir a servidores."
+  />
+
+  <!-- Favicon simple (emoji en data URL) -->
+  <link
+    rel="icon"
+    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💶</text></svg>"
+  />
+
+  <!-- Fuente -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- Estilos -->
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Lógica de la app -->
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="title-group">
+        <h1>
+          Finanzas Personales
+          <span class="title-badge">Beta</span>
+        </h1>
+        <p>Control personal de ingresos y gastos con gráficos y tabla filtrable.</p>
+        <p>Datos guardados en local y sin cuentas.</p>
+      </div>
+      <div class="header-actions">
+        <button
+          id="btnToggleTheme"
+          class="btn small"
+          type="button"
+          aria-label="Cambiar tema claro/oscuro"
+        >
+          <!-- El texto se rellena desde JavaScript según el tema -->
+        </button>
+        <label class="btn small">
+          ⬆️ Importar CSV
+          <input
+            id="importCsvInput"
+            type="file"
+            accept=".csv,text/csv"
+            class="file-input-hidden"
+          />
+        </label>
+        <button id="btnExportCsv" class="btn small" type="button">⬇️ Exportar CSV</button>
+        <button id="btnClearAll" class="btn small danger" type="button">
+          🗑️ Eliminar datos
+        </button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <!-- Panel resumen y gráficos -->
+      <section class="panel" aria-label="Resumen y gráficos">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">
+              <span class="icon">📊</span> Resumen
+            </div>
+            <p class="panel-subtitle">Agregados por rango de fechas.</p>
+          </div>
+          <div class="range-selector">
+            <span>Rango:</span>
+            <select id="dateRange" aria-label="Rango de fechas del resumen">
+              <option value="30">Últimos 30 días</option>
+              <option value="7">Últimos 7 días</option>
+              <option value="ytd">Año en curso</option>
+              <option value="all">Todo el histórico</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="summary-grid" aria-label="Resumen numérico">
+          <div class="summary-card">
+            <div class="summary-label">
+              Ingresos
+              <span class="summary-dot income"></span>
+            </div>
+            <div id="summaryIncome" class="summary-amount">0,00 €</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">
+              Gastos
+              <span class="summary-dot expense"></span>
+            </div>
+            <div id="summaryExpense" class="summary-amount">0,00 €</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">
+              Balance
+              <span class="summary-dot balance"></span>
+            </div>
+            <div id="summaryBalance" class="summary-amount">0,00 €</div>
+            <div class="summary-extra">
+              Movimientos: <strong id="summaryCount">0</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="charts">
+          <div class="chart-card">
+            <div class="chart-header">
+              <strong>Distribución por categoría</strong>
+              <span>Gastos</span>
+            </div>
+            <div class="chart-wrapper">
+              <canvas id="categoryChart" aria-label="Gastos por categoría"></canvas>
+              <div id="categoryChartEmpty" class="chart-empty" style="display:none;">
+                No hay gastos con los filtros actuales.
+              </div>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-header">
+              <strong>Evolución mensual</strong>
+              <span>Ingresos y gastos</span>
+            </div>
+            <div class="chart-wrapper">
+              <canvas id="timelineChart" aria-label="Evolución mensual de ingresos y gastos"></canvas>
+              <div id="timelineChartEmpty" class="chart-empty" style="display:none;">
+                No hay datos con los filtros actuales.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Panel tabla -->
+    <section class="panel full-width" aria-label="Listado de movimientos">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">
+            <span class="icon">📜</span> Movimientos
+          </div>
+          <p class="panel-subtitle">Tabla filtrada por rango, tipo, categoría y texto.</p>
+        </div>
+        <button id="btnOpenNewTx" class="btn primary small" type="button">
+          ➕ Nuevo movimiento
+        </button>
+      </div>
+
+      <div class="table-toolbar">
+        <div class="table-toolbar-left">
+          <span id="tableCount">0 movimientos</span>
+        </div>
+        <div class="table-toolbar-right">
+          <div class="date-filters">
+            <input id="historyFromDate" type="date" aria-label="Fecha desde" />
+            <input id="historyToDate" type="date" aria-label="Fecha hasta" />
+          </div>
+          <select id="filterType" class="filter-select" aria-label="Filtrar por tipo">
+            <option value="all">Todos</option>
+            <option value="income">Solo ingresos</option>
+            <option value="expense">Solo gastos</option>
+          </select>
+          <select
+            id="filterCategory"
+            class="filter-select"
+            aria-label="Filtrar por categoría"
+          >
+            <option value="all">Todas las categorías</option>
+          </select>
+          <input
+            id="searchText"
+            type="text"
+            class="search-input"
+            placeholder="Filtrar por categoría o nota..."
+            aria-label="Buscar por texto"
+          />
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table aria-describedby="tableCount">
+          <thead>
+            <tr>
+              <th>
+                <button type="button" class="sort-btn" data-field="date">
+                  Fecha <span class="sort-icon">↕</span>
+                </button>
+              </th>
+              <th>Tipo</th>
+              <th>
+                <button type="button" class="sort-btn" data-field="category">
+                  Categoría <span class="sort-icon">↕</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sort-btn" data-field="note">
+                  Nota <span class="sort-icon">↕</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sort-btn" data-field="amount">
+                  Importe <span class="sort-icon">↕</span>
+                </button>
+              </th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="txTableBody">
+            <!-- filas dinámicas -->
+          </tbody>
+        </table>
+        <div id="tableEmpty" class="table-empty" style="display:none;">
+          <p id="tableEmptyText">
+            Sin movimientos. Registra un ingreso o gasto con el botón "Nuevo movimiento".
+          </p>
+          <button id="btnClearFilters" type="button" class="btn small">
+            Limpiar filtros
+          </button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Modal nuevo / editar movimiento -->
+  <div id="newTxModal" class="modal-backdrop" aria-hidden="true">
+    <section class="panel modal-panel" role="dialog" aria-modal="true">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">
+            <span class="icon">➕</span> <span id="formTitle">Nuevo movimiento</span>
+          </div>
+          <p class="panel-subtitle">Alta de ingreso o gasto.</p>
+        </div>
+        <button
+          type="button"
+          id="btnCloseNewTx"
+          class="modal-close-btn"
+          aria-label="Cerrar formulario"
+        >
+          ✕
+        </button>
+      </div>
+
+      <form id="txForm" autocomplete="off">
+        <div class="field-group">
+          <label for="type">Tipo</label>
+          <div class="field-row">
+            <select id="type" required>
+              <option value="income">Ingreso</option>
+              <option value="expense">Gasto</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label for="amount">Importe</label>
+          <input
+            id="amount"
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="Ej: 1200"
+            required
+          />
+        </div>
+
+        <div class="field-group">
+          <label for="date">Fecha</label>
+          <input id="date" type="date" required />
+        </div>
+
+        <div class="field-group">
+          <label for="category">Categoría</label>
+          <select id="category" required>
+            <option value="">Selecciona una categoría</option>
+          </select>
+        </div>
+
+        <div class="field-group full">
+          <label for="note">Nota (opcional)</label>
+          <input id="note" type="text" placeholder="Descripción del movimiento..." />
+        </div>
+
+        <div class="btn-submit">
+          <button type="submit" class="btn primary" id="formSubmitBtn">
+            Guardar movimiento
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+<footer class="app-footer">
+  <p>
+    Finanzas Personales · Datos locales · Sin cuentas · v0.1  
+    <br>
+    Hecho por <a href="https://github.com/guimmy-sites/finanzas-personales" target="_blank">GUIMMY</a>
+  </p>
+</footer>
+</body>
+</html>
